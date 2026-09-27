@@ -1,0 +1,10 @@
+{
+  "name": "Finance PWA",
+  "short_name": "Finanças",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#07101f",
+  "theme_color": "#07101f",
+  "lang": "pt-BR",
+  "description": "Assistente financeiro pessoal de Thiago e Rebeca"
+}
