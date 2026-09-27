@@ -8,7 +8,7 @@ const here = path.dirname(fileURLToPath(import.meta.url));
 const html = fs.readFileSync(path.join(here, '..', 'index.html'), 'utf8');
 
 test('voice transcription waits for user review before sending', () => {
-  const match = html.match(/function voice\(\)\{([\s\S]*?)function moves/);
+  const match = html.match(/function voice\(\)\{([\s\S]*?)function show/);
   assert.ok(match, 'voice() function should exist');
   const voiceBody = match[1];
   assert.match(voiceBody, /Transcrição pronta/i);
