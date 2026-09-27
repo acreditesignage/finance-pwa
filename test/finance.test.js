@@ -9,13 +9,22 @@ test('parses Brazilian money to integer cents', () => {
 
 test('classifies common finance descriptions', () => {
   assert.equal(classifyCategory('Abasteci diesel no posto'), 'Combustível');
-  assert.equal(classifyCategory('Pedi iFood'), 'Alimentação');
+  assert.equal(classifyCategory('Pedi iFood'), 'Alimentos');
+  assert.equal(classifyCategory('Comprei no Atacadão'), 'Supermercado');
+  assert.equal(classifyCategory('Assinei o ChatGPT'), 'Software');
+  assert.equal(classifyCategory('Fui ao cinema'), 'Diversão');
+  assert.equal(classifyCategory('Gasto imprevisto com encanador'), 'Gastos não previstos');
+  assert.equal(classifyCategory('Paguei a conta de luz da Enel'), 'Luz');
+  assert.equal(classifyCategory('Paguei a conta de água'), 'Água');
+  assert.equal(classifyCategory('Paguei a internet da Vivo Fibra'), 'Internet');
+  assert.equal(classifyCategory('Paguei o aluguel'), 'Aluguel');
+  assert.equal(classifyCategory('Paguei o IPTU 2026'), 'IPTU');
 });
 
 test('keeps Thiago and Rebeca transactions isolated', async () => {
   const store = createMemoryStore();
   await store.addTransaction('thiago', { type: 'expense', amountCents: 10000, description: 'diesel', category: 'Combustível' });
-  await store.addTransaction('rebeca', { type: 'expense', amountCents: 4500, description: 'café', category: 'Alimentação' });
+  await store.addTransaction('rebeca', { type: 'expense', amountCents: 4500, description: 'café', category: 'Alimentos' });
   assert.equal((await store.listTransactions('thiago')).length, 1);
   assert.equal((await store.listTransactions('rebeca')).length, 1);
   assert.equal((await store.listTransactions('thiago'))[0].description, 'diesel');
