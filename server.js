@@ -5,6 +5,7 @@ import crypto from 'node:crypto';
 import { fileURLToPath } from 'node:url';
 import { createPostgresStore } from './lib/store.js';
 import { processMessage, monthKey } from './lib/finance.js';
+import { safeEqual } from './lib/auth.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const PORT = Number(process.env.PORT || 3000);
@@ -38,7 +39,7 @@ function sessionUser(req) {
   const [userId, exp, sig] = token.split('.');
   if (!userId || !exp || !sig || Number(exp) < Date.now()) return null;
   const expected = crypto.createHmac('sha256', SESSION_SECRET).update(`${userId}.${exp}`).digest('hex');
-  if (sig.length !== expected.length || !crypto.timingSafeEqual(Buffer.from(sig), Buffer.from(expected))) return null;
+  if (!safeEqual(sig, expected)) return null;
   return ['thiago','rebeca'].includes(userId) ? userId : null;
 }
 function requireUser(req, res) { const u=sessionUser(req); if(!u) json(res,401,{error:'unauthorized'}); return u; }
@@ -55,7 +56,7 @@ const server = http.createServer(async (req,res)=>{
     if (req.method==='GET' && url.pathname==='/api/health') { await store.ping(); return json(res,200,{ok:true}); }
     if (req.method==='POST' && url.pathname==='/api/login') {
       const b=await readBody(req); const user=String(b.user||'').toLowerCase(); const pin=String(b.pin||'');
-      if (!PINS[user] || !crypto.timingSafeEqual(Buffer.from(pin), Buffer.from(PINS[user]))) return json(res,401,{error:'invalid_credentials'});
+      if (!PINS[user] || !safeEqual(pin, PINS[user])) return json(res,401,{error:'invalid_credentials'});
       const label=user==='thiago'?'Thiago':'Rebeca';
       return json(res,200,{user:{id:user,name:label}},{'set-cookie':`fp_session=${encodeURIComponent(sign(user))}; Path=/; HttpOnly; Secure; SameSite=Lax; Max-Age=2592000`});
     }
