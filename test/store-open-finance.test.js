@@ -49,6 +49,26 @@ run('provider transaction upsert is idempotent, user scoped and preserves consum
   await store.close();
 });
 
+run('deleting imported transaction restores reconciled manual entry and removes bank row', async () => {
+  const store=createPostgresStore(databaseUrl);
+  await store.init();
+  const suffix=`${Date.now()}-${Math.random()}`;
+  const connection=await store.upsertBankConnection('thiago',{provider:'pluggy',providerItemId:`item-del-${suffix}`,institutionName:'Itaú',status:'UPDATED'});
+  const account=await store.upsertBankAccount('thiago',{connectionId:connection.id,providerAccountId:`acc-del-${suffix}`,type:'BANK',name:'Conta',balanceCents:0});
+  const manual=await store.addTransaction('thiago',{type:'expense',amountCents:5000,description:'padaria manual',category:'Alimentos',occurredAt:'2026-09-27T12:00:00Z',source:'manual'});
+  const bank=await store.upsertImportedTransaction('thiago',{type:'expense',amountCents:5000,description:'PADARIA',category:'Alimentos',occurredAt:'2026-09-27T12:00:00Z',provider:'pluggy',providerTransactionId:`tx-del-${suffix}`,bankAccountId:account.id,externalStatus:'POSTED',isConsumption:true});
+  await store.markReconciled('thiago',manual.id,bank.id);
+  assert.equal((await store.listTransactions('thiago')).find(x=>x.id===manual.id).reconciliationStatus,'reconciled');
+  const deleted=await store.deleteImportedTransactions('thiago','pluggy',[`tx-del-${suffix}`]);
+  assert.equal(deleted,1);
+  const after=await store.listTransactions('thiago');
+  assert.equal(after.some(x=>x.id===bank.id),false);
+  const restored=after.find(x=>x.id===manual.id);
+  assert.equal(restored.reconciliationStatus,'not_needed');
+  assert.equal(restored.reconciledTransactionId,null);
+  await store.close();
+});
+
 run('webhook event recording is replay-safe', async () => {
   const store = createPostgresStore(databaseUrl);
   await store.init();
