@@ -11,44 +11,40 @@ run('Open Finance store isolates users and provider item ownership', async () =>
   const suffix = `${Date.now()}-${Math.random()}`;
   const itemThiago = `item-thiago-${suffix}`;
   const itemRebeca = `item-rebeca-${suffix}`;
-
   const c1 = await store.upsertBankConnection('thiago', { provider:'pluggy', providerItemId:itemThiago, institutionName:'Itaú', status:'UPDATED' });
   await store.upsertBankConnection('rebeca', { provider:'pluggy', providerItemId:itemRebeca, institutionName:'Outro banco', status:'UPDATED' });
-
   const thiago = await store.listBankConnections('thiago');
   const rebeca = await store.listBankConnections('rebeca');
   assert.ok(thiago.some(x => x.providerItemId === itemThiago));
   assert.ok(!thiago.some(x => x.providerItemId === itemRebeca));
   assert.ok(rebeca.some(x => x.providerItemId === itemRebeca));
   assert.ok(!rebeca.some(x => x.providerItemId === itemThiago));
-
   await assert.rejects(() => store.upsertBankConnection('rebeca', { provider:'pluggy', providerItemId:itemThiago, institutionName:'Itaú', status:'UPDATED' }));
   assert.equal((await store.getBankConnection('thiago', c1.id)).providerItemId, itemThiago);
   await store.close();
 });
 
-run('provider transaction upsert is idempotent and user scoped', async () => {
+run('provider transaction upsert is idempotent, user scoped and preserves consumption flag', async () => {
   const store = createPostgresStore(databaseUrl);
   await store.init();
   const suffix = `${Date.now()}-${Math.random()}`;
   const connection = await store.upsertBankConnection('thiago', { provider:'pluggy', providerItemId:`item-${suffix}`, institutionName:'Itaú', status:'UPDATED' });
-  const account = await store.upsertBankAccount('thiago', {
-    connectionId:connection.id, providerAccountId:`account-${suffix}`, type:'BANK', subtype:'CHECKING_ACCOUNT', name:'Conta', institutionName:'Itaú', currency:'BRL', balanceCents:100000
-  });
-
+  const account = await store.upsertBankAccount('thiago', { connectionId:connection.id, providerAccountId:`account-${suffix}`, type:'BANK', subtype:'CHECKING_ACCOUNT', name:'Conta', institutionName:'Itaú', currency:'BRL', balanceCents:100000 });
   const first = await store.upsertImportedTransaction('thiago', {
-    type:'expense', amountCents:5230, description:'PADARIA', category:'Alimentos', occurredAt:'2026-09-27T13:00:00Z',
-    provider:'pluggy', providerTransactionId:`tx-${suffix}`, bankAccountId:account.id, externalStatus:'POSTED', merchantName:'Padaria Teste'
+    type:'expense', amountCents:5230, description:'TRANSFERENCIA', category:'Outros', occurredAt:'2026-09-27T13:00:00Z',
+    provider:'pluggy', providerTransactionId:`tx-${suffix}`, bankAccountId:account.id, externalStatus:'POSTED', merchantName:null, isConsumption:false
   });
   const second = await store.upsertImportedTransaction('thiago', {
-    type:'expense', amountCents:5230, description:'PADARIA ATUALIZADA', category:'Alimentos', occurredAt:'2026-09-27T13:00:00Z',
-    provider:'pluggy', providerTransactionId:`tx-${suffix}`, bankAccountId:account.id, externalStatus:'POSTED', merchantName:'Padaria Teste'
+    type:'expense', amountCents:5230, description:'TRANSFERENCIA ATUALIZADA', category:'Outros', occurredAt:'2026-09-27T13:00:00Z',
+    provider:'pluggy', providerTransactionId:`tx-${suffix}`, bankAccountId:account.id, externalStatus:'POSTED', merchantName:null, isConsumption:false
   });
-
   assert.equal(first.id, second.id);
   const rows = await store.listTransactions('thiago');
+  const imported = rows.find(x => x.providerTransactionId === `tx-${suffix}`);
   assert.equal(rows.filter(x => x.providerTransactionId === `tx-${suffix}`).length, 1);
-  assert.equal(rows.find(x => x.providerTransactionId === `tx-${suffix}`).source, 'open_finance');
+  assert.equal(imported.source, 'open_finance');
+  assert.equal(imported.isConsumption, false);
+  assert.equal((await store.getImportedTransactionByProviderId('thiago','pluggy',`tx-${suffix}`)).id, first.id);
   assert.equal((await store.listTransactions('rebeca')).some(x => x.providerTransactionId === `tx-${suffix}`), false);
   await store.close();
 });
