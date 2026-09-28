@@ -22,6 +22,7 @@ if(process.env.PLUGGY_CLIENT_ID&&process.env.PLUGGY_CLIENT_SECRET){
 }
 
 const publicBaseUrl=process.env.PUBLIC_BASE_URL || 'https://finance-pwa-app-production.up.railway.app';
-const handler=createFinanceHandler({store,sessionSecret:SESSION_SECRET,pins:PINS,pluggy,publicBaseUrl});
+const webhookSecret=process.env.PLUGGY_WEBHOOK_SECRET || null;
+const handler=createFinanceHandler({store,sessionSecret:SESSION_SECRET,pins:PINS,pluggy,publicBaseUrl,webhookSecret});
 const server=http.createServer(handler);
 server.listen(PORT,'0.0.0.0',()=>console.log(`finance-pwa listening on ${PORT}`));
