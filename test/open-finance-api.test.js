@@ -117,6 +117,18 @@ test('attach-item ignores browser userId and assigns ownership from session', as
   assert.equal(store.connections.find(x=>x.providerItemId==='item-new').userId,'thiago');
 }));
 
+test('attach-item rejects a Pluggy item explicitly tagged to another user', async () => {
+  const store=createFakeStore();
+  const pluggy=createPluggy({async getItem(itemId){return{id:itemId,status:'UPDATED',clientUserId:'rebeca',connector:{name:'Itaú'}};}});
+  await withServer(async({base})=>{
+    const cookie=await login(base,'thiago','111111');
+    const r=await fetch(`${base}/api/open-finance/attach-item`,{method:'POST',headers:{...jsonHeaders,cookie},body:JSON.stringify({itemId:'foreign-item'})});
+    assert.equal(r.status,409);
+    assert.deepEqual(await r.json(),{error:'bank_connection_owned_by_other_user'});
+    assert.equal(store.connections.some(x=>x.providerItemId==='foreign-item'),false);
+  },{store,pluggy});
+});
+
 test('discover returns reconnect_required when Pluggy item listing is disabled', async () => {
   const err=Object.assign(new Error('disabled'),{code:'LIST_ITEMS_FEATURE_NOT_ENABLED',status:403});
   await withServer(async ({base}) => {
