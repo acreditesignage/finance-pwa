@@ -112,6 +112,17 @@ test('sync imports accounts/transactions, reconciles once and remains idempotent
   assert.equal(store.syncRuns.at(-1).status, 'success');
 });
 
+test('sync preserves negative account balance instead of turning debt positive', async () => {
+  const store=createFakeStore();
+  const pluggy={
+    async getItem(){return{id:'item-1',status:'UPDATED',connector:{name:'Itaú'}};},
+    async listAccounts(){return[{id:'acc-neg',type:'BANK',subtype:'CHECKING_ACCOUNT',name:'Conta negativa',balance:-123.45,currencyCode:'BRL'}];},
+    async listTransactions(){return[];}
+  };
+  await syncConnection({userId:'thiago',connection:{id:'conn-1',provider:'pluggy',providerItemId:'item-1',institutionName:'Itaú',status:'UPDATED'},store,pluggy,now:new Date('2026-09-28T00:00:00Z')});
+  assert.equal(store.accounts.get('acc-neg').balanceCents,-12345);
+});
+
 test('sync failure records error but does not delete previously imported rows', async () => {
   const store = createFakeStore();
   store.transactions.set('pluggy:old', { id:'old', provider:'pluggy', providerTransactionId:'old' });
