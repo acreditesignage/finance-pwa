@@ -17,7 +17,8 @@ test('voice transcription waits for user review before sending', () => {
 
 test('Open Finance is visible without permanent Pluggy credentials in frontend', () => {
   assert.match(html, /Open Finance/i);
-  assert.match(html, /cdn\.pluggy\.ai\/pluggy-connect\/v2\.14\.2\/pluggy-connect\.js/);
+  assert.match(html, /cdn\.pluggy\.ai\/pluggy-connect\/v2\.8\.2\/pluggy-connect\.js/);
+  assert.doesNotMatch(html, /pluggy-connect\/v2\.14\.2\/pluggy-connect\.js/);
   assert.doesNotMatch(html, /PLUGGY_CLIENT_ID|PLUGGY_CLIENT_SECRET|clientSecret\s*:/);
 });
 
