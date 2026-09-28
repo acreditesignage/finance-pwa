@@ -6,14 +6,16 @@ import { createFinanceHandler } from '../lib/app.js';
 function fakeStore() {
   const events=new Set();
   const connections=[{id:'conn-t',userId:'thiago',provider:'pluggy',providerItemId:'item-t',institutionName:'Itaú',status:'UPDATED'}];
+  const deletedCalls=[];
   return {
-    events,connections,
+    events,connections,deletedCalls,
     async ping(){return true;}, async listTransactions(){return [];}, async listChat(){return [];},
     async listBankConnections(userId){return connections.filter(x=>x.userId===userId);}, async listBankAccounts(){return [];},
     async getBankConnectionByProviderItemId(itemId){return connections.find(x=>x.providerItemId===itemId)||null;},
     async getBankConnection(userId,id){return connections.find(x=>x.userId===userId&&x.id===id)||null;},
     async upsertBankConnection(userId,data){const row=connections.find(x=>x.providerItemId===data.providerItemId);if(row){Object.assign(row,data);return row;}const n={id:'conn-new',userId,...data};connections.push(n);return n;},
     async recordWebhookEvent(eventId){if(events.has(eventId))return false;events.add(eventId);return true;},
+    async deleteImportedTransactions(userId,provider,ids){deletedCalls.push({userId,provider,ids});return ids.length;},
     async addChat(){}, async recordSyncRun(){}
   };
 }
@@ -50,6 +52,13 @@ test('webhook ownership comes only from stored item mapping, never body user fie
   assert.equal(syncCalls.length,1);
   assert.equal(syncCalls[0].userId,'thiago');
   assert.equal(syncCalls[0].connection.id,'conn-t');
+}));
+
+test('transactions/deleted removes only mapped user imported ids and does not run full sync', async()=>withServer(async({base,store,syncCalls})=>{
+  const r=await post(base,{event:'transactions/deleted',eventId:'evt-tx-del',itemId:'item-t',accountId:'acc-t',transactionIds:['tx-a','tx-b'],userId:'rebeca'});
+  assert.equal(r.status,202); await tick();
+  assert.equal(syncCalls.length,0);
+  assert.deepEqual(store.deletedCalls,[{userId:'thiago',provider:'pluggy',ids:['tx-a','tx-b']}]);
 }));
 
 test('unknown item and unsupported event are acknowledged without sync', async()=>withServer(async({base,syncCalls})=>{
