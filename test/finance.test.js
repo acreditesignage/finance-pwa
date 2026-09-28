@@ -28,24 +28,22 @@ test('has 50 internal expense types', () => {
 });
 
 test('classifies all 50 expense types', () => {
-  for (const [text, category] of taxonomyCases) {
-    assert.equal(classifyCategory(text), category, text);
-  }
+  for (const [text, category] of taxonomyCases) assert.equal(classifyCategory(text), category, text);
 });
 
 test('keeps Thiago and Rebeca transactions isolated', async () => {
   const store = createMemoryStore();
-  await store.addTransaction('thiago', { type: 'expense', amountCents: 10000, description: 'diesel', category: 'Combustível' });
-  await store.addTransaction('rebeca', { type: 'expense', amountCents: 4500, description: 'café', category: 'Alimentos' });
+  await store.addTransaction('thiago', { type:'expense', amountCents:10000, description:'diesel', category:'Combustível' });
+  await store.addTransaction('rebeca', { type:'expense', amountCents:4500, description:'café', category:'Alimentos' });
   assert.equal((await store.listTransactions('thiago')).length, 1);
   assert.equal((await store.listTransactions('rebeca')).length, 1);
 });
 
 test('chat records an expense and later answers the monthly total', async () => {
   const store = createMemoryStore();
-  const first = await processMessage({ userId: 'thiago', text: 'Gastei R$ 100 de diesel no posto', store, now: new Date('2026-09-27T12:00:00-03:00') });
+  const first = await processMessage({ userId:'thiago', text:'Gastei R$ 100 de diesel no posto', store, now:new Date('2026-09-27T12:00:00-03:00') });
   assert.equal(first.transaction.amountCents, 10000);
-  const answer = await processMessage({ userId: 'thiago', text: 'Quanto gastei de diesel este mês?', store, now: new Date('2026-09-27T12:10:00-03:00') });
+  const answer = await processMessage({ userId:'thiago', text:'Quanto gastei de diesel este mês?', store, now:new Date('2026-09-27T12:10:00-03:00') });
   assert.match(answer.reply, /R\$\s*100,00/);
 });
 
@@ -56,20 +54,13 @@ test('accepts shorthand expense phrases without forcing a fixed sentence', async
     'Conta de luz 328','Paguei a internet 119,90','Aluguel 1.500','IPTU 430','ChatGPT 129,90',
     'Netflix 39,90','Uber 26 reais','Cinema 75','Anota 40 de lanche','Coloca aí 80 de supermercado'
   ];
-  const templates = [
-    d => `Gastei R$ 10,50 em ${d}`,
-    d => `Anota aí R$ 10,50 de ${d}`,
-    d => `Registra 10 reais e 50 centavos em ${d}`,
-    d => `${d} R$ 10,50`
-  ];
+  const templates = [d=>`Gastei R$ 10,50 em ${d}`,d=>`Anota aí R$ 10,50 de ${d}`,d=>`Registra 10 reais e 50 centavos em ${d}`,d=>`${d} R$ 10,50`];
   const descriptors = ['padaria','supermercado','gasolina','farmácia','restaurante','uber','cinema','ChatGPT','internet','aluguel','IPTU','academia','barbearia','pet shop','hotel','faculdade','camisa','pizzaria','cafeteria','estacionamento'];
-  const generated = descriptors.flatMap(d => templates.map(t => t(d)));
-  const samples = [...phrases, ...generated];
+  const samples = [...phrases, ...descriptors.flatMap(d=>templates.map(t=>t(d)))];
   assert.equal(samples.length, 100);
-
   for (const text of samples) {
     const store = createMemoryStore();
-    const result = await processMessage({ userId: 'thiago', text, store, now: new Date('2026-09-27T12:00:00-03:00') });
+    const result = await processMessage({ userId:'thiago', text, store, now:new Date('2026-09-27T12:00:00-03:00') });
     assert.ok(result.transaction, `should register: ${text}`);
     assert.equal(result.transaction.type, 'expense', text);
     assert.match(result.reply, /R\$/);
@@ -78,7 +69,7 @@ test('accepts shorthand expense phrases without forcing a fixed sentence', async
 
 test('does not guess that a bare number is an expense', async () => {
   const store = createMemoryStore();
-  const result = await processMessage({ userId: 'thiago', text: '50', store, now: new Date('2026-09-27T12:00:00-03:00') });
+  const result = await processMessage({ userId:'thiago', text:'50', store, now:new Date('2026-09-27T12:00:00-03:00') });
   assert.equal(result.transaction, undefined);
   assert.match(result.reply, /R\$\s*50,00|50/);
 });
@@ -86,7 +77,23 @@ test('does not guess that a bare number is an expense', async () => {
 test('does not treat transfers, card payments or investments as expenses', async () => {
   for (const text of ['Transferi R$ 500 para minha outra conta','Paguei R$ 1.200 da fatura do cartão','Apliquei R$ 2.000 no CDB']) {
     const store = createMemoryStore();
-    const result = await processMessage({ userId: 'thiago', text, store, now: new Date('2026-09-27T12:00:00-03:00') });
+    const result = await processMessage({ userId:'thiago', text, store, now:new Date('2026-09-27T12:00:00-03:00') });
     assert.equal(result.transaction, undefined, text);
   }
+});
+
+test('monthly chat uses America/Sao_Paulo at UTC month boundary', async () => {
+  const store = createMemoryStore();
+  await store.addTransaction('thiago', { type:'expense', amountCents:1000, description:'Padaria', category:'Alimentos', occurredAt:'2026-10-01T01:30:00.000Z', source:'open_finance', isConsumption:true, reconciliationStatus:'unmatched' });
+  const answer = await processMessage({ userId:'thiago', text:'Quanto gastei este mês?', store, now:new Date('2026-09-30T23:00:00-03:00') });
+  assert.match(answer.reply, /R\$\s*10,00/);
+});
+
+test('monthly chat excludes reconciled manual duplicate and non-consumption movement', async () => {
+  const store = createMemoryStore();
+  await store.addTransaction('thiago', { type:'expense', amountCents:5000, description:'Padaria manual', category:'Alimentos', occurredAt:'2026-09-27T12:00:00Z', source:'manual', isConsumption:true, reconciliationStatus:'reconciled' });
+  await store.addTransaction('thiago', { type:'expense', amountCents:5000, description:'Padaria banco', category:'Alimentos', occurredAt:'2026-09-27T12:00:00Z', source:'open_finance', isConsumption:true, reconciliationStatus:'matched' });
+  await store.addTransaction('thiago', { type:'expense', amountCents:100000, description:'Transferência', category:'Outros', occurredAt:'2026-09-27T12:00:00Z', source:'open_finance', isConsumption:false, reconciliationStatus:'unmatched' });
+  const answer = await processMessage({ userId:'thiago', text:'Quanto gastei este mês?', store, now:new Date('2026-09-27T12:00:00-03:00') });
+  assert.match(answer.reply, /R\$\s*50,00/);
 });
